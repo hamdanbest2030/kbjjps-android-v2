@@ -1,487 +1,283 @@
 /* =========================================================
-   KB-JPS (Android/Web) - utils.js (FULL)
-   - Offline (LocalStorage) + Online (API optional)
-   - Plain-text password (ikut permintaan projek)
-   - GitHub Pages safe
+   KB-JPS (Android/Web) - utils.js (FULL) - GitHub Pages Safe
+   - Offline (LocalStorage) first
+   - Online API placeholder (set API base later)
+   - Superadmin always exists
    ========================================================= */
-
 "use strict";
 
-/* -------------------- GLOBAL NAMESPACE -------------------- */
 window.KBJPS = window.KBJPS || {};
 (function (K) {
-  K.VERSION = "KBJPS-UTILS-1.0.0";
+  K.VERSION = "KBJPS-UTILS-GHP-1.0.0";
 
-  /* -------------------- STORAGE KEYS -------------------- */
+  // Timezone helper (avoid "TZ is not defined")
+  var TZ = (Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kuala_Lumpur");
+  window.TZ = TZ;
+
   const KEY_USERS = "kbjps_users";
   const KEY_SESSION = "kbjps_session";
-  const KEY_API_BASE = "kbjps_api_base";
   const KEY_ACTIVITIES = "kbjps_activities";
   const KEY_AUDIT = "kbjps_audit";
-  const KEY_SETTINGS = "kbjps_settings";
+  const KEY_API_BASE = "kbjps_api_base";
 
-  /* -------------------- BASIC HELPERS -------------------- */
-  function safeParseJSON(str, fallback) {
-    try {
-      const v = JSON.parse(str);
-      return v === undefined ? fallback : v;
-    } catch (e) {
-      return fallback;
-    }
+  function safeParse(str, fallback) {
+    try { return JSON.parse(str); } catch (e) { return fallback; }
   }
-
-  function safeStringifyJSON(obj, fallbackStr = "[]") {
-    try {
-      return JSON.stringify(obj);
-    } catch (e) {
-      return fallbackStr;
-    }
-  }
-
-  function nowISO() {
-    return new Date().toISOString();
-  }
-
-  function uid(prefix = "id") {
-    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  }
-
-  function normalizeEmail(email) {
-    return String(email || "").trim().toLowerCase();
-  }
-
-  function normalizeText(t) {
-    return String(t || "").trim();
-  }
-
-  function getLS(key, fallback) {
-    const raw = localStorage.getItem(key);
-    if (raw === null || raw === undefined) return fallback;
-    return safeParseJSON(raw, fallback);
-  }
-
-  function setLS(key, value) {
-    localStorage.setItem(key, safeStringifyJSON(value, "{}"));
-  }
-
   function getArr(key) {
-    const v = getLS(key, []);
+    const raw = localStorage.getItem(key);
+    const v = raw ? safeParse(raw, []) : [];
     return Array.isArray(v) ? v : [];
   }
-
   function setArr(key, arr) {
-    setLS(key, Array.isArray(arr) ? arr : []);
+    localStorage.setItem(key, JSON.stringify(Array.isArray(arr) ? arr : []));
+  }
+  function getObj(key, fallback) {
+    const raw = localStorage.getItem(key);
+    return raw ? safeParse(raw, fallback) : fallback;
+  }
+  function setObj(key, obj) {
+    localStorage.setItem(key, JSON.stringify(obj ?? null));
   }
 
-  /* -------------------- UI HELPERS -------------------- */
-  function qs(sel, root) {
-    return (root || document).querySelector(sel);
-  }
-  function qsa(sel, root) {
-    return Array.from((root || document).querySelectorAll(sel));
+  function uid(prefix) { return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`; }
+  function normEmail(e) { return String(e || "").trim().toLowerCase(); }
+  function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
   }
 
-  function showMsg(text, type = "info") {
-    // Cari elemen mesej jika ada
-    const el =
-      qs("#msg") ||
-      qs(".msg") ||
-      qs("[data-msg]");
-
-    if (el) {
-      el.textContent = text || "";
-      el.style.display = text ? "block" : "none";
-      el.style.borderColor = type === "error" ? "#ff5a5a" : "#2bd26f";
-      el.style.color = type === "error" ? "#ffdfdf" : "#dbffea";
-      return;
-    }
-    // fallback
-    if (text) alert(text);
-  }
-
-  /* -------------------- AUDIT LOG -------------------- */
-  function audit(action, detail) {
-    const logs = getArr(KEY_AUDIT);
-    const session = getSession();
-    logs.unshift({
-      id: uid("audit"),
-      at: nowISO(),
-      action: String(action || "").toUpperCase(),
-      userEmail: session?.email || "",
-      detail: detail || ""
-    });
-    // limit size
-    if (logs.length > 500) logs.length = 500;
-    setArr(KEY_AUDIT, logs);
-  }
-
-  K.getAuditLogs = function () {
-    return getArr(KEY_AUDIT);
+  K.dom = {
+    qs: (s, r) => (r || document).querySelector(s),
+    qsa: (s, r) => Array.from((r || document).querySelectorAll(s)),
+    esc
   };
 
-  /* -------------------- API BASE (ONLINE MODE) -------------------- */
+  K.ui = (function () {
+    let el = null;
+    function ensure() {
+      if (el) return el;
+      el = document.createElement("div");
+      el.className = "toast";
+      el.innerHTML = '<div class="t"></div><div class="m"></div>';
+      document.body.appendChild(el);
+      return el;
+    }
+    function toast(msg, type) {
+      const t = ensure();
+      t.className = "toast show " + (type || "");
+      t.querySelector(".t").textContent = (type || "info").toUpperCase();
+      t.querySelector(".m").textContent = msg || "";
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => (t.className = "toast"), 2600);
+    }
+    function openModal(html) {
+      let back = document.getElementById("kbjpsModalBack");
+      if (!back) {
+        back = document.createElement("div");
+        back.id = "kbjpsModalBack";
+        back.className = "modalback";
+        back.innerHTML = '<div class="card modal" id="kbjpsModal"></div>';
+        document.body.appendChild(back);
+        back.addEventListener("click", (e) => { if (e.target === back) closeModal(); });
+      }
+      document.getElementById("kbjpsModal").innerHTML = html || "";
+      back.classList.add("show");
+    }
+    function closeModal() {
+      const back = document.getElementById("kbjpsModalBack");
+      if (back) back.classList.remove("show");
+    }
+    return { toast, openModal, closeModal };
+  })();
+
+  K.audit = (function () {
+    function add(action, detail) {
+      const list = getArr(KEY_AUDIT);
+      const sess = getObj(KEY_SESSION, null);
+      list.unshift({
+        id: uid("audit"),
+        at: new Date().toISOString(),
+        action: String(action || "UNKNOWN").toUpperCase(),
+        detail: detail || "",
+        by: sess?.email || "GUEST",
+        role: sess?.role || ""
+      });
+      if (list.length > 800) list.length = 800;
+      setArr(KEY_AUDIT, list);
+    }
+    function list() { return getArr(KEY_AUDIT); }
+    return { add, list };
+  })();
+
   K.setApiBase = function (url) {
-    const clean = normalizeText(url);
-    localStorage.setItem(KEY_API_BASE, clean);
-    return clean;
+    localStorage.setItem(KEY_API_BASE, String(url || "").trim());
   };
-
   K.getApiBase = function () {
-    return normalizeText(localStorage.getItem(KEY_API_BASE) || "");
+    return String(localStorage.getItem(KEY_API_BASE) || "").trim();
   };
 
-  K.isOnlineMode = function () {
-    return !!K.getApiBase();
-  };
-
-  async function apiFetch(path, opts = {}) {
-    const base = K.getApiBase();
-    if (!base) throw new Error("API belum diset. Mode Offline.");
-    const url = base.replace(/\/+$/, "") + "/" + String(path || "").replace(/^\/+/, "");
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 15000);
-
-    try {
-      const res = await fetch(url, {
-        method: opts.method || "GET",
-        headers: Object.assign({ "Content-Type": "application/json" }, opts.headers || {}),
-        body: opts.body ? JSON.stringify(opts.body) : undefined,
-        signal: controller.signal
-      });
-      const text = await res.text();
-      const data = safeParseJSON(text, { raw: text });
-
-      if (!res.ok) {
-        const msg = data?.message || data?.error || `HTTP ${res.status}`;
-        throw new Error(msg);
+  K.seed = (function () {
+    function run(force = false) {
+      if (force) {
+        localStorage.removeItem(KEY_USERS);
+        localStorage.removeItem(KEY_SESSION);
+        localStorage.removeItem(KEY_ACTIVITIES);
+        localStorage.removeItem(KEY_AUDIT);
       }
-      return data;
-    } finally {
-      clearTimeout(t);
+      const users = getArr(KEY_USERS);
+
+      const hasSuper = users.some(u => normEmail(u.email) === "superadmin@superadmin.com" || String(u.role||"").toUpperCase()==="SUPERADMIN");
+      if (!hasSuper) {
+        users.push({ id:"u-superadmin", name:"SUPERADMIN", email:"superadmin@superadmin.com", password:"123456", role:"SUPERADMIN", status:"ACTIVE", createdAt:Date.now() });
+      }
+
+      const hasAdmin = users.some(u => normEmail(u.email) === "admin@kbjps.com");
+      if (!hasAdmin) users.push({ id:"u-admin", name:"ADMIN WILAYAH", email:"admin@kbjps.com", password:"123456", role:"ADMIN", status:"ACTIVE", createdAt:Date.now() });
+
+      const hasStaff = users.some(u => normEmail(u.email) === "staff@kbjps.com");
+      if (!hasStaff) users.push({ id:"u-staff", name:"STAFF", email:"staff@kbjps.com", password:"123456", role:"STAFF", status:"ACTIVE", createdAt:Date.now() });
+
+      setArr(KEY_USERS, users);
+      if (!localStorage.getItem(KEY_ACTIVITIES)) setArr(KEY_ACTIVITIES, []);
+      if (!localStorage.getItem(KEY_AUDIT)) setArr(KEY_AUDIT, []);
     }
-  }
+    return { run };
+  })();
 
-  K.apiFetch = apiFetch;
+  K.users = (function () {
+    function all() { return getArr(KEY_USERS); }
+    function save(list) { setArr(KEY_USERS, list); }
 
-  /* -------------------- USERS / AUTH (OFFLINE STORE) -------------------- */
-  function loadUsers() {
-    return getArr(KEY_USERS);
-  }
+    function find(email) { return all().find(u => normEmail(u.email) === normEmail(email)) || null; }
 
-  function saveUsers(users) {
-    setArr(KEY_USERS, users);
-  }
+    function create({ name, email, password }) {
+      name = String(name || "").trim();
+      email = normEmail(email);
+      password = String(password || "");
+      if (!name || !email || !password) return { ok:false, message:"Nama, emel, kata laluan wajib." };
+      if (!email.includes("@")) return { ok:false, message:"Emel tidak sah." };
+      if (find(email)) return { ok:false, message:"Emel sudah wujud." };
 
-  function findUserByEmail(email) {
-    const e = normalizeEmail(email);
-    return loadUsers().find(u => normalizeEmail(u.email) === e) || null;
-  }
+      const u = { id: uid("u"), name, email, password, role:"STAFF", status:"PENDING", createdAt:Date.now() };
+      const list = all(); list.push(u); save(list);
+      K.audit.add("REGISTER", `STAFF ${email} (PENDING)`);
+      return { ok:true, user:u };
+    }
 
-  function upsertUser(user) {
-    const users = loadUsers();
-    const e = normalizeEmail(user.email);
-    const idx = users.findIndex(u => normalizeEmail(u.email) === e);
-    if (idx >= 0) users[idx] = user;
-    else users.push(user);
-    saveUsers(users);
-    return user;
-  }
+    function setStatus(email, status) {
+      const list = all();
+      const idx = list.findIndex(u => normEmail(u.email) === normEmail(email));
+      if (idx < 0) return { ok:false, message:"User tidak dijumpai." };
+      list[idx].status = String(status||"").toUpperCase();
+      save(list);
+      K.audit.add("CHANGE_STATUS", `${email} => ${list[idx].status}`);
+      return { ok:true };
+    }
 
-  // ====== WAJIB: SUPERADMIN SENTIASA ADA ======
-  function ensureSeed(force = false) {
-    if (force) {
-      localStorage.removeItem(KEY_USERS);
+    function resetPassword(email, newPassword) {
+      const list = all();
+      const idx = list.findIndex(u => normEmail(u.email) === normEmail(email));
+      if (idx < 0) return { ok:false, message:"Emel tidak dijumpai." };
+      list[idx].password = String(newPassword || "");
+      save(list);
+      K.audit.add("RESET_PASSWORD_SUCCESS", `Reset password for ${email}`);
+      return { ok:true };
+    }
+
+    return { all, find, create, setStatus, resetPassword };
+  })();
+
+  K.auth = (function () {
+    function token() { return "kbjps_" + Math.random().toString(16).slice(2) + Date.now().toString(16); }
+    function session() { return getObj(KEY_SESSION, null); }
+
+    function loginLocal(email, password) {
+      K.seed.run(false);
+      email = normEmail(email);
+      password = String(password || "");
+      const u = K.users.find(email);
+      if (!u) { K.audit.add("LOGIN_FAIL", `User not found: ${email}`); return { ok:false, message:"Login gagal: Pengguna tidak wujud." }; }
+      if (String(u.password) !== password) { K.audit.add("LOGIN_FAIL", `Wrong password: ${email}`); return { ok:false, message:"Login gagal: Kata laluan salah." }; }
+      if (String(u.status || "ACTIVE").toUpperCase() !== "ACTIVE") { K.audit.add("LOGIN_FAIL", `Status not ACTIVE: ${email}`); return { ok:false, message:"Akaun belum ACTIVE." }; }
+
+      const sess = { email:u.email, name:u.name, role:u.role, token:token(), at:Date.now() };
+      setObj(KEY_SESSION, sess);
+      K.audit.add("LOGIN", `Login ${email} (${u.role})`);
+      return { ok:true, session:sess };
+    }
+
+    function logout(redirectTo) {
+      const s = session();
+      if (s) K.audit.add("LOGOUT", `Logout ${s.email}`);
       localStorage.removeItem(KEY_SESSION);
-      localStorage.removeItem(KEY_ACTIVITIES);
-      localStorage.removeItem(KEY_AUDIT);
-      localStorage.removeItem(KEY_SETTINGS);
+      if (redirectTo) window.location.href = redirectTo;
     }
 
-    const users = loadUsers();
-
-    const hasSuper =
-      users.some(u => (u.role || "").toLowerCase() === "superadmin") ||
-      users.some(u => normalizeEmail(u.email) === "superadmin@superadmin.com");
-
-    if (!hasSuper) {
-      users.push({
-        id: "u-superadmin",
-        name: "SUPERADMIN",
-        email: "superadmin@superadmin.com",
-        password: "123456", // plain text
-        role: "superadmin",
-        wilayah: "HQ",
-        daerah: "HQ Sandakan",
-        phone: "",
-        createdAt: nowISO()
-      });
+    function requireAuth(redirectTo) {
+      const s = session();
+      if (!s?.token) {
+        const next = encodeURIComponent((location.pathname || "").split("/").pop() || "menu.html");
+        window.location.href = (redirectTo || "./index.html") + "?next=" + next;
+        return false;
+      }
+      return true;
     }
 
-    // contoh admin/staff (optional, senang test)
-    const hasAdmin = users.some(u => normalizeEmail(u.email) === "admin@kbjps.com");
-    if (!hasAdmin) {
-      users.push({
-        id: "u-admin",
-        name: "ADMIN WILAYAH",
-        email: "admin@kbjps.com",
-        password: "123456",
-        role: "admin",
-        wilayah: "Tawau",
-        daerah: "Serudong",
-        phone: "",
-        createdAt: nowISO()
-      });
+    return { session, loginLocal, logout, requireAuth };
+  })();
+
+  K.activities = (function () {
+    function all() { return getArr(KEY_ACTIVITIES); }
+    function save(list) { setArr(KEY_ACTIVITIES, list); }
+    function create(data) {
+      const sess = K.auth.session();
+      if (!sess) return { ok:false, message:"Sila login." };
+      const item = {
+        id: uid("a"),
+        title: String(data.title||"").trim(),
+        date: String(data.date||"").trim(),
+        time: String(data.time||"").trim(),
+        location: String(data.location||"").trim(),
+        notes: String(data.notes||"").trim(),
+        invites: Array.isArray(data.invites) ? data.invites : [],
+        createdBy: sess.email,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        status: "AKTIF"
+      };
+      if (!item.title || !item.date) return { ok:false, message:"Tajuk & tarikh wajib." };
+      const list = all(); list.push(item); save(list);
+      K.audit.add("CREATE_ACTIVITY", `${item.title} on ${item.date}`);
+      return { ok:true, activity:item };
     }
-
-    const hasStaff = users.some(u => normalizeEmail(u.email) === "staff@kbjps.com");
-    if (!hasStaff) {
-      users.push({
-        id: "u-staff",
-        name: "STAFF",
-        email: "staff@kbjps.com",
-        password: "123456",
-        role: "staff",
-        wilayah: "Sandakan",
-        daerah: "HQ Sandakan",
-        phone: "",
-        createdAt: nowISO()
-      });
+    function remove(id) {
+      const list = all();
+      const idx = list.findIndex(a => a.id === id);
+      if (idx < 0) return { ok:false, message:"Aktiviti tidak dijumpai." };
+      const title = list[idx].title;
+      list.splice(idx, 1); save(list);
+      K.audit.add("DELETE_ACTIVITY", `${title} (${id})`);
+      return { ok:true };
     }
-
-    saveUsers(users);
-    return users;
-  }
-
-  K.ensureSeed = ensureSeed;
-
-  function getSession() {
-    return getLS(KEY_SESSION, null);
-  }
-
-  function setSession(sess) {
-    setLS(KEY_SESSION, sess);
-  }
-
-  K.getSession = getSession;
-
-  K.getCurrentUser = function () {
-    const s = getSession();
-    if (!s?.email) return null;
-    return findUserByEmail(s.email);
-  };
-
-  K.logout = function (redirectTo = "index.html") {
-    audit("LOGOUT", "User logout");
-    localStorage.removeItem(KEY_SESSION);
-    window.location.href = redirectTo;
-  };
-
-  K.requireAuth = function (allowedRoles) {
-    const u = K.getCurrentUser();
-    if (!u) {
-      window.location.href = "index.html";
-      return null;
+    function byDate(date) { return all().filter(a => a.date === date); }
+    function recent(limit=10) {
+      const list = all().slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+      return list.slice(0, limit);
     }
-    if (Array.isArray(allowedRoles) && allowedRoles.length) {
-      const r = String(u.role || "").toLowerCase();
-      const ok = allowedRoles.map(x => String(x).toLowerCase()).includes(r);
-      if (!ok) {
-        showMsg("Akses ditolak (role tidak dibenarkan).", "error");
-        setTimeout(() => (window.location.href = "calendar.html"), 800);
-        return null;
+    return { all, create, remove, byDate, recent };
+  })();
+
+  K.includes = {
+    async loadInto(sel, file, fallbackHtml) {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      try {
+        const res = await fetch(file, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        el.innerHTML = await res.text();
+      } catch (e) {
+        if (fallbackHtml) el.innerHTML = fallbackHtml;
       }
     }
-    return u;
   };
-
-  // LOGIN (OFFLINE / ONLINE placeholder)
-  K.login = async function (email, password) {
-    const e = normalizeEmail(email);
-    const p = String(password || "");
-
-    if (!e || !p) {
-      throw new Error("Sila isi email dan kata laluan.");
-    }
-
-    // Pastikan seed wujud dulu
-    ensureSeed(false);
-
-    // OFFLINE login (LocalStorage)
-    const user = findUserByEmail(e);
-    if (!user) throw new Error("Login gagal: Pengguna tidak wujud.");
-    if (String(user.password || "") !== p) throw new Error("Login gagal: Kata laluan salah.");
-
-    // create session
-    const token = "kbjps-" + uid("jwt"); // token pseudo untuk frontend
-    setSession({
-      token,
-      email: user.email,
-      role: user.role,
-      name: user.name,
-      loginAt: nowISO()
-    });
-
-    audit("LOGIN", `Login berjaya (${user.email})`);
-    return user;
-  };
-
-  // REGISTER (buat staff / admin — superadmin biasanya tak daftar)
-  K.register = function (payload) {
-    ensureSeed(false);
-
-    const name = normalizeText(payload?.name);
-    const email = normalizeEmail(payload?.email);
-    const password = String(payload?.password || "");
-    const role = normalizeText(payload?.role || "staff") || "staff";
-    const wilayah = normalizeText(payload?.wilayah || "");
-    const daerah = normalizeText(payload?.daerah || "");
-    const phone = normalizeText(payload?.phone || "");
-
-    if (!name || !email || !password) throw new Error("Nama, email, dan kata laluan wajib diisi.");
-
-    if (findUserByEmail(email)) throw new Error("Email ini sudah wujud.");
-
-    const user = {
-      id: uid("u"),
-      name,
-      email,
-      password,
-      role: role.toLowerCase(),
-      wilayah,
-      daerah,
-      phone,
-      createdAt: nowISO()
-    };
-
-    upsertUser(user);
-    audit("REGISTER", `Daftar pengguna (${email})`);
-    return user;
-  };
-
-  // RESET PASSWORD (OFFLINE)
-  K.resetPassword = function (email, newPassword) {
-    ensureSeed(false);
-
-    const e = normalizeEmail(email);
-    const np = String(newPassword || "");
-    if (!e || !np) throw new Error("Email dan kata laluan baru wajib.");
-
-    const user = findUserByEmail(e);
-    if (!user) throw new Error("Pengguna tidak wujud.");
-
-    user.password = np;
-    user.updatedAt = nowISO();
-    upsertUser(user);
-
-    audit("RESET_PASSWORD", `Reset kata laluan (${e})`);
-    return true;
-  };
-
-  // LIST USERS
-  K.listUsers = function () {
-    ensureSeed(false);
-    return loadUsers();
-  };
-
-  // DELETE USER (optional)
-  K.deleteUser = function (email) {
-    const e = normalizeEmail(email);
-    const users = loadUsers().filter(u => normalizeEmail(u.email) !== e);
-    saveUsers(users);
-    audit("DELETE_USER", `Delete user (${e})`);
-    return true;
-  };
-
-  /* -------------------- DATA RESET / FIX LOGIN -------------------- */
-  K.resetData = function () {
-    // Reset semua data KBJPS
-    localStorage.removeItem(KEY_USERS);
-    localStorage.removeItem(KEY_SESSION);
-    localStorage.removeItem(KEY_ACTIVITIES);
-    localStorage.removeItem(KEY_AUDIT);
-    localStorage.removeItem(KEY_SETTINGS);
-
-    // Jangan buang API base kecuali mahu
-    // localStorage.removeItem(KEY_API_BASE);
-
-    ensureSeed(false);
-    audit("RESET_DATA", "Reset Data (Fix Login)");
-    return true;
-  };
-
-  /* -------------------- ACTIVITIES (BASIC) -------------------- */
-  K.listActivities = function () {
-    return getArr(KEY_ACTIVITIES);
-  };
-
-  K.saveActivity = function (activity) {
-    const arr = getArr(KEY_ACTIVITIES);
-    const a = Object.assign({}, activity);
-
-    if (!a.id) a.id = uid("act");
-    if (!a.createdAt) a.createdAt = nowISO();
-    a.updatedAt = nowISO();
-
-    const idx = arr.findIndex(x => x.id === a.id);
-    if (idx >= 0) arr[idx] = a;
-    else arr.push(a);
-
-    setArr(KEY_ACTIVITIES, arr);
-    audit("SAVE_ACTIVITY", a.title || a.id);
-    return a;
-  };
-
-  K.deleteActivity = function (id) {
-    const arr = getArr(KEY_ACTIVITIES).filter(x => x.id !== id);
-    setArr(KEY_ACTIVITIES, arr);
-    audit("DELETE_ACTIVITY", id);
-    return true;
-  };
-
-  /* -------------------- HEADER/FOOTER AUTO LOAD -------------------- */
-  K.loadPartials = function () {
-    const headerHost = qs("#header");
-    if (headerHost) {
-      fetch("header.html")
-        .then(r => r.text())
-        .then(html => (headerHost.innerHTML = html))
-        .catch(() => {});
-    }
-    const footerHost = qs("#footer");
-    if (footerHost) {
-      fetch("footer.html")
-        .then(r => r.text())
-        .then(html => (footerHost.innerHTML = html))
-        .catch(() => {});
-    }
-  };
-
-  /* -------------------- SAFE INIT ON EVERY PAGE -------------------- */
-  document.addEventListener("DOMContentLoaded", function () {
-    // Pastikan tiada error "KBJPS not defined" & superadmin sentiasa ada
-    ensureSeed(false);
-
-    // auto load header/footer jika ada placeholder
-    K.loadPartials();
-
-    // auto wire logout button jika ada
-    const btnLogout = qs("[data-logout]");
-    if (btnLogout) {
-      btnLogout.addEventListener("click", function (e) {
-        e.preventDefault();
-        K.logout("index.html");
-      });
-    }
-
-    // auto wire fix login button jika ada
-    const btnFix = qs("[data-fix-login]");
-    if (btnFix) {
-      btnFix.addEventListener("click", function (e) {
-        e.preventDefault();
-        K.resetData();
-        showMsg("Reset Data selesai. Cuba login: superadmin@superadmin.com / 123456", "info");
-      });
-    }
-  });
 
 })(window.KBJPS);

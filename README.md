@@ -1,26 +1,14 @@
-# KB-JPS Online Package
+# KBJPS Android (GitHub Pages Safe)
+Semua path adalah relative `./` + ada `<base href="./">` untuk elak masalah repo subfolder.
 
-Folder ini ada:
-- `kbjps-backend/` -> API server real (Node.js + MongoDB + GridFS + Reset Email/WhatsApp real)
-- `kbjps-android/` -> Frontend HTML (Android) yang boleh OFFLINE atau ONLINE.
-  - Untuk ONLINE: buka Dashboard -> Mod Online (Real) -> isi URL API -> reload.
+## Login default
+- superadmin@superadmin.com / 123456
+- admin@kbjps.com / 123456
+- staff@kbjps.com / 123456
 
-## Run Frontend (Android / Pydroid 3)
-```bash
-cd /storage/emulated/0/Download/kbjps-android
-python -m http.server 8002
-```
-Chrome:
-`http://127.0.0.1:8002/index.html`
+Jika login gagal / user tidak wujud:
+- Tekan `Reset Data (Fix Login)` di index.html
+- Refresh (Ctrl+F5)
 
-## Run Backend
-Lihat `kbjps-backend/README.md`.
-
-
-## GitHub Pages (Login Online)
-1) Deploy frontend folder `kbjps-android/` ke root repo (atau set Pages kepada `/kbjps-android`).
-2) Pastikan backend sudah live (contoh Koyeb).
-3) Di halaman login, isi URL backend pada ruang **Mode Online (GitHub)**, tekan **Simpan API**.
-4) Login akan guna endpoint backend (`/api/auth/login`).
-
-Tip: Boleh auto-set URL sekali terus guna parameter `?api=https://APP.koyeb.app`.
+## GitHub Pages
+Settings → Pages → Deploy from branch → main /(root)

@@ -1,81 +1,44 @@
-<!DOCTYPE html>
-<html lang="ms">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Profil – KB‑JPS</title>
-  <link rel="icon" type="image/png" href="assets/logo-jps.png">
-  <link rel="stylesheet" href="css/style.css"/>
-  <link rel="stylesheet" href="css/theme.css"/>
-  <script src="js/utils.js"></script>
-  
-</head>
-<body class="neon-bg">
-<div id="kbjpsHeader"></div>
-<div class="page">
-
-<div class="card glass">
-  <h2 class="neon-text-sm">Profil Saya</h2>
-
-  <div class="card">
-    <div class="small">Email (unik)</div>
-    <div id="emailBox" style="font-weight:900;"></div>
+<!doctype html><html lang="ms"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="./">
+<link rel="icon" type="image/png" href="./assets/favicon.png">
+<link rel="stylesheet" href="./css/style.css">
+<link rel="stylesheet" href="./css/theme.css"><title>Profil – KB-JPS</title></head><body>
+<div id="header"></div>
+<div class="container">
+<div class="grid"><div class="col-12 card form">
+  <div class="btnrow"><a class="btn secondary" href="./menu.html">← Dashboard</a></div>
+  <h2>Profil</h2><p>Maklumat pengguna semasa.</p>
+  <div class="grid">
+    <div class="col-6"><div class="kpi"><small>Nama</small><b id="pName">—</b></div></div>
+    <div class="col-6"><div class="kpi"><small>Emel</small><b id="pEmail">—</b></div></div>
+    <div class="col-6"><div class="kpi"><small>Role</small><b id="pRole">—</b></div></div>
+    <div class="col-6"><div class="kpi"><small>Token</small><b id="pToken" style="font-size:12px">—</b></div></div>
   </div>
-
-  <form id="form" class="card">
-    <input class="input" id="name" placeholder="Nama" required/>
-    <input class="input" id="phone" placeholder="Telefon" required/>
-    <input class="input" id="password" type="password" placeholder="Kata laluan baru (biar kosong jika tidak tukar)"/>
-    <button class="btn-primary" type="submit" style="width:100%;">Simpan</button>
-    <div id="status" class="status" style="display:none;"></div>
-  </form>
-</div>
-
-</div>
-<div id="kbjpsFooter"></div>
+  <hr class="sep">
+  <h3>Tukar kata laluan</h3>
+  <div class="grid">
+    <div class="col-6"><div class="field"><label>Password baru</label><input class="input" id="newPass" type="password"></div></div>
+    <div class="col-6"><div class="field"><label>Sahkan</label><input class="input" id="newPass2" type="password"></div></div>
+  </div>
+  <div class="btnrow"><button class="btn" id="btnChangePass" type="button">Simpan</button></div>
+</div></div>
 <script>
-(async () => {
-  try { await KBJPS.ensureSeed(); } catch(e) {}
-  const user = KBJPS.requireAuth({});
-  if(!user) return;
-  await KBJPS.renderHeader({ title: "Profil", backHref: "menu.html", showBack: true, showLogout: true });
-  KBJPS.renderFooter();
-})();
-</script>
-
-<script>
-document.addEventListener("DOMContentLoaded", async () => {
-  const user = KBJPS.requireAuth();
-  if(!user) return;
-
-  document.getElementById("emailBox").innerText = user.email;
-
-  const nameEl = document.getElementById("name");
-  const phoneEl = document.getElementById("phone");
-  nameEl.value = user.name || "";
-  phoneEl.value = user.phone || "";
-
-  const st = document.getElementById("status");
-  const show = (msg,type) => { st.style.display="block"; KBJPS.setStatus(st,msg,type); };
-
-  document.getElementById("form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    show("Memproses...", "info");
-    try{
-      const updated = await KBJPS.users.updateSelf(user.email, {
-        name: nameEl.value,
-        phone: phoneEl.value,
-        password: document.getElementById("password").value
-      });
-      show("Berjaya disimpan.", "ok");
-      // refresh local user
-      setTimeout(()=>location.reload(), 350);
-    }catch(err){
-      show("Gagal: " + (err.message || err), "error");
-    }
+document.addEventListener('DOMContentLoaded', () => {
+  const { auth, users, ui } = window.KBJPS;
+  const s = auth.session(); if(!s) return;
+  pName.textContent=s.name||'-'; pEmail.textContent=s.email||'-'; pRole.textContent=s.role||'-'; pToken.textContent=s.token||'-';
+  btnChangePass.addEventListener('click', () => {
+    const p1=newPass.value, p2=newPass2.value;
+    if(!p1 || p1!==p2){ ui.toast('Password tidak sama / kosong.', 'warn'); return; }
+    const res=users.resetPassword(s.email, p1);
+    if(!res.ok){ ui.toast(res.message||'Gagal.', 'err'); return; }
+    ui.toast('Password ditukar.', 'ok'); newPass.value=''; newPass2.value='';
   });
 });
 </script>
+</div>
+<div id="footer"></div>
+<script src="./js/utils.js" defer></script>
+<script src="./js/script.js" defer></script>
 
-</body>
-</html>
+</body></html>

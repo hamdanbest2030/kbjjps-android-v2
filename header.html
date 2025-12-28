@@ -1,25 +1,27 @@
-<!DOCTYPE html>
-<html lang="ms">
-<head>
-<meta charset="UTF-8">
-<title>KB-JPS Header</title>
-<link rel="stylesheet" href="css/style.css"/>
-<link rel="stylesheet" href="css/theme.css"/>
-</head>
-<body class="neon-bg">
-<!-- Header ini biasanya dimasukkan melalui JS (KBJPS.renderHeader). -->
-<div class="topbar">
-  <div class="tb-left">
-    <img src="assets/logo-jps.png" class="tb-logo" alt="Logo JPS"/>
-    <div class="tb-title">
-      <div class="tb-system">KB‑JPS</div>
-      <div class="tb-page">Header</div>
+<div class="headerbar">
+  <div class="headerinner">
+    <div class="brand">
+      <img src="./assets/logo-jps.png" alt="Logo JPS">
+      <div>
+        <div class="title">KB-JPS</div>
+        <div class="sub">Sistem Kalendar Bersepadu – Jabatan Perhutanan Sabah</div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <a href="./menu.html">Dashboard</a>
+      <a href="./calendar.html">Kalendar</a>
+      <a href="./notifications.html">Notifikasi</a>
+      <a href="./reports.html">Laporan</a>
+      <a href="./audit.html">Audit</a>
+      <a href="./profile.html">Profil</a>
+      <button class="btn secondary" data-logout type="button">LOGOUT</button>
+      <div class="userpill">
+        <div>
+          <div style="font-weight:800" id="currentUserName">—</div>
+          <small id="currentUserRole">—</small>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="tb-right">
-    <button class="tb-btn">← Dashboard</button>
-    <button class="tb-btn danger">LOGOUT</button>
-  </div>
 </div>
-</body>
-</html>
