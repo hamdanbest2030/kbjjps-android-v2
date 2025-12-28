@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Log Masuk – KB‑JPS</title>
+  <link rel="icon" type="image/png" href="assets/logo-jps.png">
+  <link rel="stylesheet" href="css/style.css"/>
+  <link rel="stylesheet" href="css/theme.css"/>
+  <script src="js/utils.js"></script>
+  
+</head>
+<body class="neon-bg">
+<div id="kbjpsHeader"></div>
+<div class="page">
+
+<div class="card glass">
+  <img src="assets/logo-jps.png" class="logo" alt="Logo JPS"/>
+  <h2 class="neon-text-sm">Log Masuk</h2>
+
+  <form id="loginForm">
+    <input class="input" type="email" id="email" placeholder="Email" required/>
+    <input class="input" type="password" id="password" placeholder="Kata Laluan" required/>
+    <div class="card glass" style="margin-top:12px;padding:12px;border-radius:14px;">
+      <div class="hint" style="margin:0 0 8px;opacity:.9">
+        <b>Mode Online (GitHub)</b>: Masukkan URL backend (Koyeb/Render/Railway) supaya login betul-betul guna server.
+      </div>
+      <input class="input" type="url" id="apiBaseLogin" placeholder="Contoh: https://kbjps-api.koyeb.app" style="margin-bottom:10px"/>
+      <div class="row">
+        <button class="btn-secondary" type="button" id="btnSaveApi">Simpan API</button>
+        <button class="btn-secondary" type="button" id="btnClearApi">Offline</button>
+      </div>
+      <div id="apiStatusLogin" class="hint" style="margin-top:8px;opacity:.9"></div>
+    </div>
+
+    <button class="btn-primary" type="submit" style="width:100%;">Log Masuk</button>
+    <div id="status" class="status" style="display:none;"></div>
+        <button type="button" id="btnClearData" class="btn secondary" style="margin-top:10px;">Reset Data (Fix Login)</button>
+        <div class="hint" style="opacity:.85;margin-top:6px;font-size:12px;">Jika “Memproses…” lama: tekan Reset Data, tutup semua tab KBJPS, buka semula.</div>
+  </form>
+
+  <div class="row" style="margin-top:10px;">
+    <button class="btn-secondary" type="button" onclick="location.href='register.html'">Daftar STAFF</button>
+    <button class="btn-secondary" type="button" onclick="location.href='reset-password.html'">Reset Kata Laluan</button>
+  </div>
+</div>
+
+</div>
+<div id="kbjpsFooter"></div>
+<script>
+(async () => {
+  try { await KBJPS.ensureSeed(); } catch(e) {}
+  const user = KBJPS.auth.getLoggedInUser();
+  
+  await KBJPS.renderHeader({ title: "Log Masuk", backHref: "menu.html", showBack: false, showLogout: false });
+  KBJPS.renderFooter();
+})();
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const st = document.getElementById("status");
+  const show = (msg, type) => { st.style.display="block"; KBJPS.setStatus(st, msg, type); };
+  const clearData = async () => {
+    try { localStorage.clear(); sessionStorage.clear(); } catch(e) {}
+    // Delete IndexedDB database
+    try {
+      const req1 = indexedDB.deleteDatabase("kbjps");
+      const req2 = indexedDB.deleteDatabase("kbjps_android_v4");
+      req1.onsuccess = req2.onsuccess = () => {};
+      req1.onerror = req2.onerror = () => {};
+      req1.onblocked = req2.onblocked = () => {};
+    } catch(e) {}
+    show("Data telah direset. Sila reload halaman.", "ok");
+  };
+  
+  // ===== GitHub Pages ONLINE config (API BASE) =====
+  const apiBaseLogin = document.getElementById("apiBaseLogin");
+  const apiStatusLogin = document.getElementById("apiStatusLogin");
+  const btnSaveApi = document.getElementById("btnSaveApi");
+  const btnClearApi = document.getElementById("btnClearApi");
+
+  function normApi(v){ return String(v||"").trim().replace(/\/+$/,""); }
+  function refreshApiStatus(){
+    const cur = normApi(localStorage.getItem("kbjps_api_base") || "");
+    if (apiBaseLogin) apiBaseLogin.value = cur;
+    if (apiStatusLogin) apiStatusLogin.textContent = cur ? ("Online: " + cur) : "Offline (tiada API).";
+  }
+
+  // Support auto-set via URL param: ?api=https://xxxxx
+  try{
+    const u = new URL(location.href);
+    const p = normApi(u.searchParams.get("api") || "");
+    if (p) {
+      localStorage.setItem("kbjps_api_base", p);
+      // clean param
+      u.searchParams.delete("api");
+      history.replaceState({}, "", u.toString());
+    }
+  }catch(e){}
+
+  refreshApiStatus();
+
+  if (btnSaveApi) btnSaveApi.addEventListener("click", () => {
+    const v = normApi(apiBaseLogin ? apiBaseLogin.value : "");
+    if (!v) { localStorage.removeItem("kbjps_api_base"); refreshApiStatus(); show("API dibuang. Mode offline.", "ok"); return; }
+    localStorage.setItem("kbjps_api_base", v);
+    refreshApiStatus();
+    show("API disimpan. Cuba login semula.", "ok");
+  });
+
+  if (btnClearApi) btnClearApi.addEventListener("click", () => {
+    localStorage.removeItem("kbjps_api_base");
+    refreshApiStatus();
+    show("Mode offline diaktifkan.", "ok");
+  });
+
+  const btnClear = document.getElementById("btnClearData");
+  if (btnClear) btnClear.addEventListener("click", () => { clearData(); setTimeout(() => location.reload(), 350); });
+
+  document.getElementById("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    show("Memproses...", "info");
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+
+    try {
+      const res = await KBJPS.auth.loginUser(email, password);
+      if (res.success) {
+        show("Login berjaya. Membuka Dashboard...", "ok");
+        setTimeout(() => location.href="menu.html", 250);
+      } else {
+        show("Login gagal: " + (res.message || "Sila semak semula."), "error");
+      }
+    } catch (err) {
+      const msg = String(err && (err.message || err)).toUpperCase();
+      if (msg.includes("DB_BLOCKED")) {
+        show("DB sedang digunakan tab lain. Tutup semua tab KBJPS dan cuba lagi.", "error");
+      } else if (msg.includes("DB_TIMEOUT")) {
+        show("DB lambat/tersangkut. Tekan Reset Data (Fix Login) dan cuba semula.", "error");
+      } else {
+        show("Ralat sistem: " + (err?.message || err), "error");
+      }
+    }
+  });
+});
+</script>
+
+</body>
+</html>
