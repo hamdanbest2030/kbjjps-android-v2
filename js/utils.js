@@ -13,7 +13,6 @@
   const DB_NAME = "kbjps_android_v4";
   const DB_VERSION = 2;
 
-  \1
 
   // =================== ONLINE MODE (REAL SERVER) ===================
   // Set API base URL (example: https://api-kbjps.example.com).
